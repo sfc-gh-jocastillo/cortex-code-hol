@@ -47,12 +47,34 @@ Crea 4 tablas en el schema RETAIL:
 Generar y ejecutar los 4 CREATE TABLE.
 </div>
 
-## Paso 4: Cargar datos desde S3
+## Paso 4: Conectar con S3 y cargar datos
 
-Los datos estan en un bucket S3 compartido. El instructor ya configuro la Storage Integration y el External Stage.
+Los datos del taller estan en un bucket S3 publico. Primero vamos a crear el external stage y luego cargar los datos.
+
+### Crear el External Stage
 
 <div class="prompt-block">
-Carga datos en las 4 tablas desde el external stage @HOL_SHARED.STAGES.STG_S3_RETAIL:
+Usando el rol SYSADMIN, crea un external stage llamado stg_s3_retail en el schema HOL_CORTEX_CODE.RETAIL que apunte a la URL 's3://hol-cortex-code-chile/' sin credenciales (el bucket es publico). Usa el parametro CREDENTIALS = () para indicar que no se necesitan credenciales.
+</div>
+
+<div class="expected-result">
+Generar y ejecutar un CREATE STAGE con URL de S3 y sin credenciales (acceso publico).
+</div>
+
+### Verificar que se ven los archivos
+
+<div class="prompt-block">
+Lista los archivos del stage @stg_s3_retail para verificar que puedo ver el contenido del bucket.
+</div>
+
+<div class="expected-result">
+Ejecutar LIST @stg_s3_retail y mostrar los archivos CSV y Parquet en las carpetas clientes/, productos/, ordenes/ y reviews/.
+</div>
+
+### Cargar los datos
+
+<div class="prompt-block">
+Carga datos en las 4 tablas raw desde el stage @stg_s3_retail:
 
 - raw_clientes desde /clientes/ usando csv_format
 - raw_productos desde /productos/ usando csv_format
