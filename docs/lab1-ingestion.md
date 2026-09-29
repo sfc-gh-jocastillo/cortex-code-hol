@@ -7,178 +7,120 @@ title: "Lab 1: Ingestion y Transformacion"
 
 **Duracion:** 60 minutos
 
-En este lab vas a usar Cortex Code para explorar los datos cargados desde S3 y crear transformaciones de forma acelerada con asistencia de AI.
+En este lab vas a explorar los datos cargados y crear transformaciones usando solamente prompts a Cortex Code. No escribes SQL, Cortex Code lo hace por ti.
+
+---
 
 ## Parte 1: Exploracion de Datos (15 min)
 
-### Verificar las tablas
+### Conocer las tablas
 
-```sql
-USE DATABASE HOL_CORTEX_CODE;
-USE SCHEMA RETAIL;
-USE WAREHOUSE HOL_WH;
+<div class="prompt-block">
+Muestrame las primeras 5 filas de cada una de las 4 tablas raw (raw_clientes, raw_productos, raw_ordenes, raw_reviews_clientes) para que pueda entender la estructura de los datos.
+</div>
 
-SELECT 'raw_clientes' AS tabla, COUNT(*) AS filas FROM raw_clientes
-UNION ALL
-SELECT 'raw_productos', COUNT(*) FROM raw_productos
-UNION ALL
-SELECT 'raw_ordenes', COUNT(*) FROM raw_ordenes
-UNION ALL
-SELECT 'raw_reviews_clientes', COUNT(*) FROM raw_reviews_clientes;
-```
+<div class="expected-result">
+Ejecutar SELECT * LIMIT 5 de cada tabla y mostrar los resultados.
+</div>
 
-### Explorar con Cortex Code
+### Distribucion de clientes
 
-Escribe en el chat de Cortex Code:
+<div class="prompt-block">
+Cuantos clientes hay por region? Ordenalos de mayor a menor.
+</div>
 
-> "Muestrame la distribucion de clientes por region y segmento"
+### Precios por categoria
 
-Cortex Code generara el query automaticamente. Observa como entiende el esquema de tus tablas.
+<div class="prompt-block">
+Para cada categoria de producto, muestrame cuantos productos hay, el precio promedio, el minimo y el maximo. Ordena por precio promedio descendente.
+</div>
 
-### Ejercicios de exploracion
+### Estado de ordenes
 
-Pide a Cortex Code que te ayude con estos analisis:
+<div class="prompt-block">
+Que porcentaje de ordenes esta en cada estado (Completada, Pendiente, Cancelada)?
+</div>
 
-```sql
--- Distribucion de clientes por region
-SELECT region, COUNT(*) AS total_clientes
-FROM raw_clientes
-GROUP BY region
-ORDER BY total_clientes DESC;
+### Reviews y ratings
 
--- Categorias de productos con precios
-SELECT
-    categoria,
-    COUNT(*) AS total_productos,
-    ROUND(AVG(precio), 0) AS precio_promedio,
-    MIN(precio) AS precio_min,
-    MAX(precio) AS precio_max
-FROM raw_productos
-GROUP BY categoria
-ORDER BY precio_promedio DESC;
+<div class="prompt-block">
+Como se distribuyen los ratings del 1 al 5 en las reviews? Muestrame el conteo y porcentaje de cada uno.
+</div>
 
--- Estado de ordenes
-SELECT estado, COUNT(*) AS total,
-       ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) AS porcentaje
-FROM raw_ordenes
-GROUP BY estado
-ORDER BY total DESC;
-```
+:::tip Experimenta
+Pregunta lo que quieras sobre los datos. Cortex Code entiende contexto, asi que puedes hacer preguntas como: "Cuantos clientes Premium hay en la Region Metropolitana?" o "Cual es el producto mas caro?"
+:::
 
-## Parte 2: Transformaciones con AI-Assist (25 min)
+---
+
+## Parte 2: Transformaciones (25 min)
 
 ### Metricas por cliente
 
-Pide a Cortex Code:
+<div class="prompt-block">
+Calcula para cada cliente: su nombre, region, segmento, total de ordenes completadas, total gastado, ticket promedio, fecha de primera y ultima compra, y cuantos dias lleva como cliente. Ordena por total gastado descendente.
+</div>
 
-> "Calcula para cada cliente: total gastado, numero de ordenes completadas, ticket promedio, primera y ultima compra"
+<div class="expected-result">
+Generar un query con JOINs entre raw_clientes y raw_ordenes, agregaciones y calculos de fecha. Ejecutarlo y mostrar resultados.
+</div>
 
-```sql
-SELECT
-    c.cliente_id,
-    c.nombre,
-    c.region,
-    c.segmento,
-    COUNT(DISTINCT o.orden_id) AS total_ordenes,
-    SUM(o.monto_total) AS total_gastado,
-    ROUND(AVG(o.monto_total), 2) AS ticket_promedio,
-    MIN(o.fecha_orden) AS primera_compra,
-    MAX(o.fecha_orden) AS ultima_compra,
-    DATEDIFF('day', MIN(o.fecha_orden), MAX(o.fecha_orden)) AS dias_como_cliente
-FROM raw_clientes c
-LEFT JOIN raw_ordenes o ON c.cliente_id = o.cliente_id
-WHERE o.estado = 'Completada'
-GROUP BY c.cliente_id, c.nombre, c.region, c.segmento
-ORDER BY total_gastado DESC;
-```
+### Ventas cruzadas
+
+<div class="prompt-block">
+Muestrame las ventas totales cruzando region del cliente con categoria del producto, solo para ordenes completadas. Incluye total de ordenes, ventas totales y ticket promedio. Ordena por ventas totales descendente.
+</div>
 
 ### Top 10 productos
 
-```sql
-SELECT
-    p.nombre AS producto,
-    p.categoria,
-    COUNT(DISTINCT o.orden_id) AS veces_vendido,
-    SUM(o.cantidad) AS unidades_vendidas,
-    SUM(o.monto_total) AS ingresos_totales
-FROM raw_ordenes o
-JOIN raw_productos p ON o.producto_id = p.producto_id
-WHERE o.estado = 'Completada'
-GROUP BY p.nombre, p.categoria
-ORDER BY ingresos_totales DESC
-LIMIT 10;
-```
+<div class="prompt-block">
+Cuales son los 10 productos que mas ingresos generaron? Incluye la categoria, cuantas veces se vendio, unidades vendidas e ingresos totales.
+</div>
 
 ### Tendencia mensual
 
-```sql
-SELECT
-    DATE_TRUNC('month', fecha_orden) AS mes,
-    COUNT(DISTINCT orden_id) AS ordenes,
-    SUM(monto_total) AS ventas_totales,
-    COUNT(DISTINCT cliente_id) AS clientes_unicos
-FROM raw_ordenes
-WHERE estado = 'Completada'
-GROUP BY mes
-ORDER BY mes;
-```
+<div class="prompt-block">
+Muestrame la tendencia mensual de ventas: por cada mes, cuantas ordenes completadas hubo, cuanto se vendio en total y cuantos clientes unicos compraron.
+</div>
+
+---
 
 ## Parte 3: Crear Vistas para el Pipeline (20 min)
 
+Ahora vamos a pedirle a Cortex Code que cree vistas que serviran como base para el pipeline del Lab 2.
+
 ### Vista de ordenes enriquecidas
 
-```sql
-CREATE OR REPLACE VIEW v_ordenes_enriquecidas AS
-SELECT
-    o.orden_id, o.fecha_orden, o.cantidad, o.monto_total, o.estado, o.canal,
-    c.cliente_id, c.nombre AS cliente_nombre, c.region, c.comuna, c.segmento,
-    p.producto_id, p.nombre AS producto_nombre, p.categoria,
-    p.precio AS precio_unitario, p.proveedor
-FROM raw_ordenes o
-JOIN raw_clientes c ON o.cliente_id = c.cliente_id
-JOIN raw_productos p ON o.producto_id = p.producto_id;
-```
+<div class="prompt-block">
+Crea una vista llamada v_ordenes_enriquecidas que haga JOIN de raw_ordenes con raw_clientes y raw_productos. Trae los campos mas relevantes de cada tabla: de ordenes el id, fecha, cantidad, monto, estado y canal; de clientes el id, nombre, region, comuna y segmento; de productos el id, nombre, categoria, precio unitario y proveedor.
+</div>
+
+<div class="expected-result">
+Generar y ejecutar un CREATE VIEW con los JOINs correspondientes.
+</div>
 
 ### Vista de metricas por cliente
 
-```sql
-CREATE OR REPLACE VIEW v_metricas_clientes AS
-SELECT
-    c.cliente_id, c.nombre, c.email, c.region, c.comuna, c.segmento, c.fecha_registro,
-    COUNT(DISTINCT CASE WHEN o.estado = 'Completada' THEN o.orden_id END) AS ordenes_completadas,
-    COUNT(DISTINCT CASE WHEN o.estado = 'Cancelada' THEN o.orden_id END) AS ordenes_canceladas,
-    COALESCE(SUM(CASE WHEN o.estado = 'Completada' THEN o.monto_total END), 0) AS total_gastado,
-    ROUND(AVG(CASE WHEN o.estado = 'Completada' THEN o.monto_total END), 2) AS ticket_promedio,
-    MAX(o.fecha_orden) AS ultima_compra,
-    DATEDIFF('day', MAX(o.fecha_orden), CURRENT_DATE()) AS dias_sin_comprar
-FROM raw_clientes c
-LEFT JOIN raw_ordenes o ON c.cliente_id = o.cliente_id
-GROUP BY c.cliente_id, c.nombre, c.email, c.region, c.comuna, c.segmento, c.fecha_registro;
-```
+<div class="prompt-block">
+Crea una vista llamada v_metricas_clientes que para cada cliente calcule: ordenes completadas, ordenes canceladas, total gastado (solo completadas), ticket promedio, fecha de ultima compra y dias sin comprar desde hoy. Incluye los datos basicos del cliente (nombre, email, region, comuna, segmento, fecha de registro).
+</div>
 
 ### Vista de resumen de ventas
 
-```sql
-CREATE OR REPLACE VIEW v_resumen_ventas AS
-SELECT
-    DATE_TRUNC('month', o.fecha_orden) AS mes,
-    c.region, p.categoria, o.canal,
-    COUNT(DISTINCT o.orden_id) AS total_ordenes,
-    SUM(o.monto_total) AS total_ventas,
-    COUNT(DISTINCT o.cliente_id) AS clientes_unicos,
-    ROUND(AVG(o.monto_total), 2) AS ticket_promedio
-FROM raw_ordenes o
-JOIN raw_clientes c ON o.cliente_id = c.cliente_id
-JOIN raw_productos p ON o.producto_id = p.producto_id
-WHERE o.estado = 'Completada'
-GROUP BY mes, c.region, p.categoria, o.canal;
-```
+<div class="prompt-block">
+Crea una vista llamada v_resumen_ventas que agrupe las ventas completadas por mes, region, categoria y canal. Para cada grupo calcula: total de ordenes, total de ventas, clientes unicos y ticket promedio.
+</div>
 
-:::tip Verificacion
-```sql
-SHOW VIEWS IN SCHEMA HOL_CORTEX_CODE.RETAIL;
-```
-Deberias tener 3 vistas: `v_ordenes_enriquecidas`, `v_metricas_clientes`, `v_resumen_ventas`.
-:::
+### Verificar
 
+<div class="prompt-block">
+Muestrame las vistas que existen en el schema RETAIL.
+</div>
+
+<div class="expected-result">
+Ejecutar SHOW VIEWS y mostrar las 3 vistas creadas: v_ordenes_enriquecidas, v_metricas_clientes, v_resumen_ventas.
+</div>
+
+:::info Siguiente paso
 Estas vistas alimentaran el pipeline de Dynamic Tables en el **Lab 2**.
+:::

@@ -7,204 +7,138 @@ title: "Lab 3: Streamlit in Snowflake"
 
 **Duracion:** 45 minutos
 
-En este lab vas a crear un dashboard interactivo directamente en Snowflake que consume las Dynamic Tables del Lab 2.
+En este lab vas a crear un dashboard interactivo que visualiza los resultados del pipeline. Le pides a Cortex Code que genere la app Streamlit completa.
 
 ## Que vas a construir
 
 Un dashboard con 3 secciones:
-1. **KPIs de Ventas** - Metricas principales con filtros interactivos
-2. **Analisis de Sentimiento** - Distribucion y tabla de reviews
-3. **Insights AI** - Resumenes ejecutivos generados por el LLM
+1. **KPIs de Ventas** — Metricas principales con filtros interactivos
+2. **Analisis de Sentimiento** — Distribucion y detalle de reviews
+3. **Insights AI** — Resumenes ejecutivos generados por el LLM
+
+---
 
 ## Paso 1: Crear la App (10 min)
 
-```sql
-USE DATABASE HOL_CORTEX_CODE;
-USE SCHEMA RETAIL;
-USE WAREHOUSE HOL_WH;
+Primero necesitamos crear el objeto Streamlit en Snowflake:
 
-CREATE OR REPLACE STAGE stg_streamlit_app
-  DIRECTORY = (ENABLE = TRUE);
+<div class="prompt-block">
+Crea un stage interno llamado stg_streamlit_app con directorio habilitado en el schema RETAIL. Luego crea un Streamlit llamado HOL_RETAIL_DASHBOARD usando ese stage como root_location, con main_file '/streamlit_app.py' y query_warehouse HOL_WH.
+</div>
 
-CREATE OR REPLACE STREAMLIT HOL_RETAIL_DASHBOARD
-  ROOT_LOCATION = '@HOL_CORTEX_CODE.RETAIL.stg_streamlit_app'
-  MAIN_FILE = '/streamlit_app.py'
-  QUERY_WAREHOUSE = HOL_WH
-  COMMENT = 'Dashboard Retail - HOL Cortex Code';
-```
+<div class="expected-result">
+Crear el stage y el objeto STREAMLIT. Ahora puedes ir a Snowsight > Streamlit para editar la app.
+</div>
 
-Ahora ve a **Snowsight > Streamlit > HOL_RETAIL_DASHBOARD > Edit** y pega el codigo Python de las siguientes secciones.
+Ahora ve a **Snowsight > Streamlit > HOL_RETAIL_DASHBOARD > Edit** para abrir el editor de codigo de la app.
 
-## Paso 2: Codigo del Dashboard
+---
 
-Copia el siguiente codigo completo en el editor de Streamlit:
+## Paso 2: Generar el Dashboard Completo (15 min)
 
-```python
-import streamlit as st
-from snowflake.snowpark.context import get_active_session
+Vamos a pedirle a Cortex Code que genere todo el codigo Python del dashboard de una vez:
 
-session = get_active_session()
+<div class="prompt-block">
+Genera el codigo Python completo para una app Streamlit-in-Snowflake que funcione como dashboard de retail. La app debe:
 
-st.set_page_config(page_title="Retail Dashboard - HOL Cortex Code", layout="wide")
-st.title("Dashboard Retail Chile")
-st.caption("Datos enriquecidos con Cortex AI | HOL Cortex Code")
+1. CONFIGURACION: Usar layout wide, titulo "Dashboard Retail Chile", subtitulo "Datos enriquecidos con Cortex AI"
 
-# ----- Sidebar: Filtros -----
-st.sidebar.header("Filtros")
+2. SIDEBAR con filtros: Un selectbox para Region (con opcion "Todas"), uno para Categoria (con "Todas") y uno para Canal (con "Todos"). Los valores de cada filtro deben venir de la tabla dt_ventas_detalle.
 
-regiones = session.sql(
-    "SELECT DISTINCT region FROM dt_ventas_detalle ORDER BY region"
-).collect()
-regiones_list = ["Todas"] + [r["REGION"] for r in regiones]
-region_sel = st.sidebar.selectbox("Region", regiones_list)
+3. SECCION KPIs: Mostrar en 4 columnas: Total Ordenes, Total Ventas (con formato $), Clientes Unicos y Ticket Promedio. Los datos vienen de dt_ventas_detalle filtrado por los selectores del sidebar, solo ordenes completadas.
 
-categorias = session.sql(
-    "SELECT DISTINCT categoria FROM dt_ventas_detalle ORDER BY categoria"
-).collect()
-categorias_list = ["Todas"] + [r["CATEGORIA"] for r in categorias]
-categoria_sel = st.sidebar.selectbox("Categoria", categorias_list)
+4. GRAFICOS: Un bar_chart de ventas por categoria y un line_chart de tendencia mensual de ventas. Ambos respetando los filtros.
 
-canales = session.sql(
-    "SELECT DISTINCT canal FROM dt_ventas_detalle ORDER BY canal"
-).collect()
-canales_list = ["Todos"] + [r["CANAL"] for r in canales]
-canal_sel = st.sidebar.selectbox("Canal", canales_list)
+5. SECCION SENTIMIENTO: Dos columnas. La izquierda con un bar_chart de distribucion de sentimiento (Positivo/Neutro/Negativo). La derecha con una tabla de tipo de feedback con conteo y sentimiento promedio. Debajo, una tabla con las 15 reviews mas recientes mostrando fecha, texto, rating, sentimiento y tipo de feedback. Los datos vienen de dt_reviews_enriquecidas.
 
-# ----- Construir filtro WHERE -----
-filtros = ["estado = 'Completada'"]
-if region_sel != "Todas":
-    filtros.append(f"region = '{region_sel}'")
-if categoria_sel != "Todas":
-    filtros.append(f"categoria = '{categoria_sel}'")
-if canal_sel != "Todos":
-    filtros.append(f"canal = '{canal_sel}'")
-where_clause = " AND ".join(filtros)
-```
+6. SECCION INSIGHTS AI: Un selectbox para elegir categoria. Debajo, 4 metricas en columnas (ordenes, ventas, rating, sentimiento). Debajo, un st.info con el insight_ai de esa categoria. Los datos vienen de dt_dashboard_consolidado.
 
-## Paso 3: KPIs de Ventas (15 min)
+Usa session = get_active_session() de snowflake.snowpark.context. Para los filtros, construye un WHERE clause dinamico. Formatea los numeros con separador de miles.
+</div>
 
-Agrega al mismo archivo:
+<div class="expected-result">
+Generar un archivo Python completo (~120 lineas) con todo el codigo del dashboard.
+</div>
 
-```python
-# ==================== SECCION 1: KPIs ====================
-st.header("Indicadores de Ventas")
+### Pegar el codigo en la app
 
-kpi_query = f"""
-SELECT
-    COUNT(DISTINCT orden_id) AS total_ordenes,
-    SUM(monto_total) AS total_ventas,
-    COUNT(DISTINCT cliente_id) AS clientes_unicos,
-    ROUND(AVG(monto_total), 0) AS ticket_promedio
-FROM dt_ventas_detalle
-WHERE {where_clause}
-"""
-kpis = session.sql(kpi_query).collect()[0]
+1. Copia el codigo que Cortex Code genero
+2. Ve a Snowsight > Streamlit > **HOL_RETAIL_DASHBOARD** > **Edit**
+3. Borra el contenido por defecto y pega el codigo
+4. La app se ejecutara automaticamente
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Ordenes", f"{kpis['TOTAL_ORDENES']:,}")
-col2.metric("Total Ventas", f"${kpis['TOTAL_VENTAS']:,.0f}")
-col3.metric("Clientes Unicos", f"{kpis['CLIENTES_UNICOS']:,}")
-col4.metric("Ticket Promedio", f"${kpis['TICKET_PROMEDIO']:,.0f}")
+:::tip Si hay un error
+Copia el error y pegalo en Cortex Code:
 
-# Ventas por categoria
-st.subheader("Ventas por Categoria")
-ventas_cat = session.sql(f"""
-    SELECT categoria, SUM(monto_total) AS ventas
-    FROM dt_ventas_detalle
-    WHERE {where_clause}
-    GROUP BY categoria ORDER BY ventas DESC
-""").to_pandas()
-st.bar_chart(ventas_cat.set_index("CATEGORIA")["VENTAS"])
+<div class="prompt-block">
+Mi app Streamlit me da este error: [pega el error aqui]. Corrige el codigo.
+</div>
+:::
 
-# Tendencia mensual
-st.subheader("Tendencia Mensual")
-ventas_mes = session.sql(f"""
-    SELECT mes_orden AS mes, SUM(monto_total) AS ventas
-    FROM dt_ventas_detalle
-    WHERE {where_clause}
-    GROUP BY mes ORDER BY mes
-""").to_pandas()
-st.line_chart(ventas_mes.set_index("MES")["VENTAS"])
-```
+---
 
-## Paso 4: Panel de Sentimiento (10 min)
+## Paso 3: Explorar el Dashboard (10 min)
 
-```python
-# ==================== SECCION 2: Sentimiento ====================
-st.header("Analisis de Sentimiento de Reviews")
+Una vez que la app este corriendo, explora:
 
-col_s1, col_s2 = st.columns(2)
+### Filtros
+- Selecciona **Region Metropolitana** y observa como cambian los KPIs
+- Filtra por categoria **Electronica** y revisa la tendencia mensual
+- Compara los canales: Web vs Tienda vs App
 
-with col_s1:
-    st.subheader("Distribucion de Sentimiento")
-    sent_dist = session.sql("""
-        SELECT sentimiento_label, COUNT(*) AS total
-        FROM dt_reviews_enriquecidas
-        GROUP BY sentimiento_label ORDER BY total DESC
-    """).to_pandas()
-    st.bar_chart(sent_dist.set_index("SENTIMIENTO_LABEL")["TOTAL"])
+### Sentimiento
+- Identifica que porcentaje de reviews son positivas vs negativas
+- Revisa que tipo de feedback tiene el peor sentimiento promedio
+- Lee algunas reviews recientes para ver si el sentimiento coincide
 
-with col_s2:
-    st.subheader("Tipo de Feedback")
-    feedback_dist = session.sql("""
-        SELECT tipo_feedback, COUNT(*) AS total,
-               ROUND(AVG(sentimiento_score), 3) AS sentimiento_prom
-        FROM dt_reviews_enriquecidas
-        GROUP BY tipo_feedback ORDER BY total DESC
-    """).to_pandas()
-    st.dataframe(feedback_dist, use_container_width=True)
+### Insights AI
+- Selecciona cada categoria y lee el insight generado por el LLM
+- Compara los insights: alguna categoria necesita atencion urgente?
 
-st.subheader("Reviews Recientes")
-reviews_recientes = session.sql("""
-    SELECT fecha_review, texto_review, rating, sentimiento_label,
-           tipo_feedback, ROUND(sentimiento_score, 3) AS score
-    FROM dt_reviews_enriquecidas
-    ORDER BY fecha_review DESC LIMIT 15
-""").to_pandas()
-st.dataframe(reviews_recientes, use_container_width=True)
-```
+---
 
-## Paso 5: Insights AI (10 min)
+## Paso 4: Mejorar el Dashboard (10 min)
 
-```python
-# ==================== SECCION 3: Insights AI ====================
-st.header("Insights Generados por AI")
+Ahora vamos a pedirle a Cortex Code mejoras sobre la app existente:
 
-dashboard_data = session.sql("""
-    SELECT categoria, total_ordenes, total_ventas, clientes_unicos,
-           ticket_promedio, total_reviews, sentimiento_promedio,
-           reviews_positivas, reviews_negativas, rating_promedio,
-           insight_ai
-    FROM dt_dashboard_consolidado
-    ORDER BY total_ventas DESC
-""").to_pandas()
+<div class="prompt-block">
+Agrega a mi app Streamlit un nuevo tab o seccion llamada "Top Clientes" que muestre los 10 clientes con mayor gasto total. Incluye nombre, region, segmento, total gastado y numero de ordenes. Usa los datos de dt_ventas_detalle.
+</div>
 
-cat_options = dashboard_data["CATEGORIA"].tolist()
-cat_selected = st.selectbox("Selecciona una categoria:", cat_options)
+<div class="prompt-block">
+Agrega un grafico de pie chart que muestre la distribucion de ordenes por canal (Web, Tienda, App).
+</div>
 
-row = dashboard_data[dashboard_data["CATEGORIA"] == cat_selected].iloc[0]
+:::info Experimentacion libre
+En este punto tienes libertad para pedir lo que quieras. Algunos ejemplos:
+- "Agrega un mapa de calor de ventas por region y mes"
+- "Muestra las reviews mas negativas con opcion de filtrar por tipo de feedback"
+- "Agrega metricas comparativas mes actual vs mes anterior"
+:::
 
-col_i1, col_i2, col_i3, col_i4 = st.columns(4)
-col_i1.metric("Ordenes", f"{row['TOTAL_ORDENES']:,}")
-col_i2.metric("Ventas", f"${row['TOTAL_VENTAS']:,.0f}")
-col_i3.metric("Rating Prom.", f"{row['RATING_PROMEDIO']}/5")
-col_i4.metric("Sentimiento", f"{row['SENTIMIENTO_PROMEDIO']:.3f}")
-
-st.info(f"**Insight AI para {cat_selected}:**\n\n{row['INSIGHT_AI']}")
-
-st.caption("Dashboard generado en HOL Cortex Code | Snowflake 2026")
-```
+---
 
 ## Verificacion
 
 Tu dashboard deberia tener:
 
-- 4 metricas KPI en la parte superior
-- Filtros funcionales en la barra lateral (Region, Categoria, Canal)
-- Graficos de ventas por categoria y tendencia mensual
-- Distribucion de sentimiento y tabla de reviews
-- Insights AI seleccionables por categoria
+| Seccion | Componentes |
+|---|---|
+| Header | Titulo, subtitulo |
+| Sidebar | 3 filtros interactivos (Region, Categoria, Canal) |
+| KPIs | 4 metric cards (Ordenes, Ventas, Clientes, Ticket) |
+| Graficos | Bar chart por categoria, line chart mensual |
+| Sentimiento | Distribucion + tabla de reviews |
+| Insights AI | Selector de categoria + metricas + insight del LLM |
 
-:::tip Para abrir la app
-Ve a **Snowsight > Streamlit** y haz click en `HOL_RETAIL_DASHBOARD`
+<div class="prompt-block">
+Muestrame las apps Streamlit que existen en mi schema RETAIL.
+</div>
+
+:::tip Compartir la app
+Si quieres compartir el dashboard con otras personas de tu cuenta Snowflake, pidele a Cortex Code:
+
+<div class="prompt-block">
+Otorga permisos de uso sobre la app Streamlit HOL_RETAIL_DASHBOARD al rol PUBLIC.
+</div>
 :::

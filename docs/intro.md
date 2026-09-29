@@ -5,48 +5,61 @@ title: Introduccion
 
 # Introduccion
 
-Esta guia cubre la construccion completa de un pipeline de datos con AI sobre Snowflake, usando **Cortex Code** como IDE asistido por inteligencia artificial.
+En este taller vas a construir un pipeline de datos completo usando **solo lenguaje natural**. No necesitas escribir SQL ni Python: le dices a Cortex Code que hacer y el genera, explica y ejecuta el codigo por ti.
 
-## Para quien es esta guia
+## Como funciona este taller
 
-Data Engineers, Analytics Engineers y ML Engineers con experiencia en SQL que quieren aprender a:
-- Usar AI para acelerar el desarrollo de pipelines de datos
-- Construir pipelines incrementales con Dynamic Tables
-- Enriquecer datos con funciones de Cortex AI (Sentiment, Classify, Complete)
-- Crear dashboards interactivos con Streamlit-in-Snowflake
+En cada paso de la guia vas a ver bloques como este:
+
+<div class="prompt-block">
+Crea una tabla llamada ejemplo con columnas id y nombre
+</div>
+
+<div class="expected-result">
+Generar el SQL correspondiente, mostrartelo y ejecutarlo en tu cuenta de Snowflake.
+</div>
+
+Tu trabajo es **copiar el prompt** (o escribir algo similar) en el chat de Cortex Code en Snowsight. Cortex Code se encarga del resto.
+
+:::tip Puedes experimentar
+Los prompts son sugerencias. Si quieres pedir algo diferente o explorar por tu cuenta, hazlo. Cortex Code entiende lenguaje natural y se adapta a como le hables.
+:::
 
 ## Que vas a construir
 
 | Paso | Que incluye |
 |---|---|
-| **Setup** | External Stage S3, COPY INTO, 4 tablas raw |
-| **Lab 1** | Exploracion con Cortex Code, transformaciones, vistas |
-| **Lab 2** | 3 Dynamic Tables con AI_SENTIMENT, AI_CLASSIFY, AI_COMPLETE |
-| **Lab 3** | Dashboard Streamlit-in-Snowflake con KPIs e insights AI |
+| **Setup** | Warehouse, database, stage S3, carga de datos |
+| **Lab 1** | Exploracion de datos, transformaciones, vistas |
+| **Lab 2** | Pipeline con Dynamic Tables + AI (Sentiment, Classify, Complete) |
+| **Lab 3** | Dashboard interactivo con Streamlit-in-Snowflake |
 
 ## Pipeline objetivo
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SNOWFLAKE PLATFORM                           │
-│                                                                 │
-│  S3 Bucket ──► External Stage ──► COPY INTO ──► Tablas Raw      │
-│  (CSV/Parquet)                                                  │
-│                                                                 │
-│  raw_reviews ──► dt_reviews_enriquecidas (SENTIMENT + CLASSIFY) │
-│                           │                                     │
-│  raw_ordenes ──► dt_ventas_detalle (JOINs + metricas)           │
-│                           │                                     │
-│                  dt_dashboard_consolidado (+ AI_COMPLETE)        │
-│                           │                                     │
-│                  Streamlit-in-Snowflake Dashboard                │
-└─────────────────────────────────────────────────────────────────┘
+S3 Bucket (CSV/Parquet)
+    │
+    ▼
+External Stage ──► COPY INTO ──► Tablas Raw
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+            dt_reviews_enriq.  dt_ventas_detalle    │
+            (SENTIMENT +       (JOINs + metricas)   │
+             CLASSIFY)              │               │
+                    └───────────────┼───────────────┘
+                                    ▼
+                        dt_dashboard_consolidado
+                        (+ AI_COMPLETE insights)
+                                    │
+                                    ▼
+                    Streamlit-in-Snowflake Dashboard
 ```
 
 ## Requisitos
 
 - Cuenta Snowflake (trial o existente) con rol `SYSADMIN`
-- Cortex Code instalado y conectado a tu cuenta
+- Acceso a **Cortex Code en Snowsight** (panel de chat AI)
 - Navegador web moderno
 
 ## Dataset

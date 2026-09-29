@@ -48,3 +48,49 @@
 .feature-card:hover {
   border-color: var(--ifm-color-primary);
 }
+
+.prompt-block {
+  background: linear-gradient(135deg, rgba(41, 181, 232, 0.08) 0%, rgba(41, 181, 232, 0.03) 100%);
+  border-left: 4px solid var(--ifm-color-primary);
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.prompt-block::before {
+  content: 'Escribe en Cortex Code:';
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-color-primary);
+  margin-bottom: 0.5rem;
+}
+
+.prompt-block code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.expected-result {
+  background: rgba(46, 160, 67, 0.08);
+  border-left: 4px solid #2ea043;
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.25rem;
+  margin: 0.5rem 0 1rem 0;
+}
+
+.expected-result::before {
+  content: 'Cortex Code va a:';
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #2ea043;
+  margin-bottom: 0.5rem;
+}

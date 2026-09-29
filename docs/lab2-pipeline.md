@@ -7,7 +7,7 @@ title: "Lab 2: Pipeline con Dynamic Tables + Cortex AI"
 
 **Duracion:** 60 minutos
 
-En este lab vas a construir un pipeline incremental con Dynamic Tables que enriquece datos de reviews usando funciones de Cortex AI.
+En este lab vas a construir un pipeline incremental de 3 capas usando Dynamic Tables y funciones de Cortex AI. Todo via prompts.
 
 ## Pipeline objetivo
 
@@ -19,175 +19,137 @@ raw_ordenes + productos + clientes ──► dt_ventas_detalle
                           dt_dashboard_consolidado (+ AI_COMPLETE)
 ```
 
-## Parte 1: Introduccion a Dynamic Tables (10 min)
+---
 
-Una **Dynamic Table** es una tabla que Snowflake mantiene actualizada automaticamente basandose en un query SQL que defines.
+## Parte 1: Entender Dynamic Tables (10 min)
 
-| Parametro | Descripcion |
-|---|---|
-| `TARGET_LAG` | Que tan fresca debe estar la data (ej: `1 hour`) |
-| `WAREHOUSE` | Warehouse para ejecutar los refreshes |
+Antes de crear el pipeline, preguntale a Cortex Code:
 
-:::info Ventajas
-- Snowflake decide **cuando** hacer refresh (solo si los datos fuente cambiaron)
-- Pipeline **declarativo**: defines el QUE, no el COMO ni el CUANDO
-- Manejo automatico de **dependencias** entre tablas
+<div class="prompt-block">
+Explicame que es una Dynamic Table en Snowflake, que significa el parametro TARGET_LAG, y por que es mejor que una combinacion de CTAS + Task para crear pipelines incrementales.
+</div>
+
+<div class="expected-result">
+Explicarte el concepto de Dynamic Tables, TARGET_LAG, y las ventajas del enfoque declarativo vs imperativo.
+</div>
+
+:::info Concepto clave
+Una Dynamic Table se refresca automaticamente solo cuando los datos fuente cambian. Tu defines el **QUE** (un query SQL), y Snowflake se encarga del **CUANDO** y el **COMO**.
 :::
+
+---
 
 ## Parte 2: Reviews Enriquecidas con AI (20 min)
 
-Esta Dynamic Table aplica dos funciones de Cortex AI sobre cada review:
+Esta es la Dynamic Table mas interesante. Toma las reviews crudas y les agrega inteligencia artificial.
 
-```sql
-CREATE OR REPLACE DYNAMIC TABLE dt_reviews_enriquecidas
-    TARGET_LAG = '1 hour'
-    WAREHOUSE = HOL_WH
-AS
-SELECT
-    r.review_id,
-    r.orden_id,
-    r.cliente_id,
-    r.texto_review,
-    r.fecha_review,
-    r.rating,
+### Crear la Dynamic Table
 
-    -- Analisis de sentimiento: score entre -1 (negativo) y 1 (positivo)
-    SNOWFLAKE.CORTEX.SENTIMENT(r.texto_review) AS sentimiento_score,
+<div class="prompt-block">
+Crea una dynamic table llamada dt_reviews_enriquecidas con target_lag de 1 hora usando el warehouse HOL_WH. La tabla debe tomar todas las columnas de raw_reviews_clientes y agregarle:
 
-    -- Clasificamos el score en categorias
-    CASE
-        WHEN SNOWFLAKE.CORTEX.SENTIMENT(r.texto_review) > 0.3 THEN 'Positivo'
-        WHEN SNOWFLAKE.CORTEX.SENTIMENT(r.texto_review) < -0.3 THEN 'Negativo'
-        ELSE 'Neutro'
-    END AS sentimiento_label,
+1. Una columna sentimiento_score usando SNOWFLAKE.CORTEX.SENTIMENT sobre el texto_review
+2. Una columna sentimiento_label que diga 'Positivo' si el score es mayor a 0.3, 'Negativo' si es menor a -0.3, y 'Neutro' en otro caso
+3. Una columna tipo_feedback usando SNOWFLAKE.CORTEX.CLASSIFY_TEXT sobre el texto_review con estas categorias: 'Calidad del Producto', 'Servicio al Cliente', 'Envio y Logistica', 'Precio y Valor', 'Experiencia de Compra'. Extrae solo el label como VARCHAR.
+</div>
 
-    -- Clasificacion del tipo de feedback
-    SNOWFLAKE.CORTEX.CLASSIFY_TEXT(
-        r.texto_review,
-        ['Calidad del Producto', 'Servicio al Cliente',
-         'Envio y Logistica', 'Precio y Valor', 'Experiencia de Compra']
-    ):label::VARCHAR AS tipo_feedback
+<div class="expected-result">
+Generar y ejecutar un CREATE DYNAMIC TABLE que aplica AI_SENTIMENT y CLASSIFY_TEXT sobre cada review.
+</div>
 
-FROM raw_reviews_clientes r;
-```
+:::caution Tiempo de ejecucion
+El primer refresh puede tomar 1-2 minutos porque Cortex AI procesa las 500 reviews. Es normal.
+:::
 
-### Verificar resultados
+### Explorar los resultados
 
-```sql
--- Distribucion de sentimiento
-SELECT
-    sentimiento_label,
-    COUNT(*) AS total,
-    ROUND(AVG(sentimiento_score), 3) AS score_promedio,
-    ROUND(AVG(rating), 1) AS rating_promedio
-FROM dt_reviews_enriquecidas
-GROUP BY sentimiento_label
-ORDER BY total DESC;
+<div class="prompt-block">
+Muestrame la distribucion de sentimiento: cuantas reviews hay por cada sentimiento_label, con el score promedio y el rating promedio.
+</div>
 
--- Distribucion por tipo de feedback
-SELECT
-    tipo_feedback,
-    COUNT(*) AS total,
-    ROUND(AVG(sentimiento_score), 3) AS sentimiento_promedio,
-    ROUND(AVG(rating), 1) AS rating_promedio
-FROM dt_reviews_enriquecidas
-GROUP BY tipo_feedback
-ORDER BY total DESC;
-```
+<div class="prompt-block">
+Cuantas reviews hay por cada tipo de feedback? Incluye el sentimiento promedio y rating promedio de cada tipo. Cual tiene el peor sentimiento?
+</div>
+
+### Comparar AI vs Rating humano
+
+<div class="prompt-block">
+Muestrame las 5 reviews con la mayor diferencia entre el sentimiento predicho por AI y el rating del cliente. Por ejemplo, reviews con rating alto pero sentimiento negativo o viceversa.
+</div>
+
+<div class="expected-result">
+Generar un query que compare sentimiento_score con rating, mostrando los casos mas discrepantes.
+</div>
+
+---
 
 ## Parte 3: Ventas Detalle (15 min)
 
-```sql
-CREATE OR REPLACE DYNAMIC TABLE dt_ventas_detalle
-    TARGET_LAG = '1 hour'
-    WAREHOUSE = HOL_WH
-AS
-SELECT
-    o.orden_id, o.fecha_orden, o.cantidad, o.monto_total, o.estado, o.canal,
-    c.cliente_id, c.nombre AS cliente_nombre, c.region, c.comuna, c.segmento,
-    p.producto_id, p.nombre AS producto_nombre, p.categoria,
-    p.precio AS precio_unitario, p.proveedor,
-    o.monto_total / NULLIF(o.cantidad, 0) AS precio_promedio_unidad,
-    DATE_TRUNC('month', o.fecha_orden) AS mes_orden,
-    DAYOFWEEK(o.fecha_orden) AS dia_semana
-FROM raw_ordenes o
-JOIN raw_clientes c ON o.cliente_id = c.cliente_id
-JOIN raw_productos p ON o.producto_id = p.producto_id;
-```
+### Crear la Dynamic Table
+
+<div class="prompt-block">
+Crea una dynamic table llamada dt_ventas_detalle con target_lag de 1 hora usando HOL_WH. Debe hacer JOIN de raw_ordenes con raw_clientes y raw_productos, trayendo los campos principales de cada tabla. Ademas agrega columnas calculadas: precio promedio por unidad, mes de la orden (truncado a mes) y dia de la semana.
+</div>
+
+<div class="expected-result">
+Generar y ejecutar un CREATE DYNAMIC TABLE con los JOINs y columnas calculadas.
+</div>
+
+### Analizar
+
+<div class="prompt-block">
+Usando dt_ventas_detalle, muestrame las top 5 regiones por ventas completadas con su ticket promedio y cantidad de clientes unicos.
+</div>
+
+<div class="prompt-block">
+Cual es el canal de venta mas popular (Web, Tienda, App) por cada categoria de producto? Muestra las ventas totales de cada combinacion.
+</div>
+
+---
 
 ## Parte 4: Dashboard Consolidado con AI_COMPLETE (15 min)
 
-Esta DT consolida metricas de ventas + sentimiento y genera un **insight ejecutivo** por categoria usando un LLM:
+Esta es la capa Gold del pipeline: combina metricas de ventas y sentimiento, y genera un insight ejecutivo por categoria usando un LLM.
 
-```sql
-CREATE OR REPLACE DYNAMIC TABLE dt_dashboard_consolidado
-    TARGET_LAG = '1 hour'
-    WAREHOUSE = HOL_WH
-AS
-WITH metricas_categoria AS (
-    SELECT
-        v.categoria,
-        COUNT(DISTINCT v.orden_id) AS total_ordenes,
-        SUM(v.monto_total) AS total_ventas,
-        COUNT(DISTINCT v.cliente_id) AS clientes_unicos,
-        ROUND(AVG(v.monto_total), 0) AS ticket_promedio
-    FROM dt_ventas_detalle v
-    WHERE v.estado = 'Completada'
-    GROUP BY v.categoria
-),
-sentimiento_categoria AS (
-    SELECT
-        p.categoria,
-        COUNT(*) AS total_reviews,
-        ROUND(AVG(re.sentimiento_score), 3) AS sentimiento_promedio,
-        SUM(CASE WHEN re.sentimiento_label = 'Positivo' THEN 1 ELSE 0 END) AS reviews_positivas,
-        SUM(CASE WHEN re.sentimiento_label = 'Negativo' THEN 1 ELSE 0 END) AS reviews_negativas,
-        ROUND(AVG(re.rating), 1) AS rating_promedio
-    FROM dt_reviews_enriquecidas re
-    JOIN raw_ordenes o ON re.orden_id = o.orden_id
-    JOIN raw_productos p ON o.producto_id = p.producto_id
-    GROUP BY p.categoria
-)
-SELECT
-    m.categoria,
-    m.total_ordenes,
-    m.total_ventas,
-    m.clientes_unicos,
-    m.ticket_promedio,
-    s.total_reviews,
-    s.sentimiento_promedio,
-    s.reviews_positivas,
-    s.reviews_negativas,
-    s.rating_promedio,
-    SNOWFLAKE.CORTEX.COMPLETE(
-        'mistral-large2',
-        'Eres un analista de retail. Genera un insight ejecutivo breve '
-        || '(maximo 2 oraciones en espanol) para la categoria "'
-        || m.categoria || '" con estos datos: '
-        || m.total_ordenes || ' ordenes, $' || m.total_ventas::VARCHAR || ' en ventas, '
-        || m.clientes_unicos || ' clientes, ticket promedio $' || m.ticket_promedio::VARCHAR || ', '
-        || s.total_reviews || ' reviews con sentimiento '
-        || s.sentimiento_promedio::VARCHAR || ' (-1 a 1), rating '
-        || s.rating_promedio::VARCHAR || '/5. '
-        || 'Destaca lo mas relevante y sugiere una accion concreta.'
-    ) AS insight_ai
-FROM metricas_categoria m
-LEFT JOIN sentimiento_categoria s ON m.categoria = s.categoria;
-```
+### Crear la Dynamic Table final
 
-### Ver los insights generados
+<div class="prompt-block">
+Crea una dynamic table llamada dt_dashboard_consolidado con target_lag de 1 hora usando HOL_WH. Debe:
 
-```sql
-SELECT categoria, insight_ai
-FROM dt_dashboard_consolidado
-ORDER BY total_ventas DESC;
-```
+1. Calcular metricas de ventas por categoria desde dt_ventas_detalle (solo completadas): total ordenes, total ventas, clientes unicos, ticket promedio
 
-## Verificacion del Pipeline
+2. Calcular metricas de sentimiento por categoria: total reviews, sentimiento promedio, reviews positivas, reviews negativas, rating promedio. Para esto, haz join de dt_reviews_enriquecidas con raw_ordenes y raw_productos para obtener la categoria.
 
-```sql
-SHOW DYNAMIC TABLES IN SCHEMA HOL_CORTEX_CODE.RETAIL;
-```
+3. Hacer LEFT JOIN de ambas CTEs por categoria
+
+4. Agregar una columna insight_ai usando SNOWFLAKE.CORTEX.COMPLETE con el modelo 'mistral-large2'. El prompt debe decir: "Eres un analista de retail. Genera un insight ejecutivo breve (maximo 2 oraciones en espanol)" y pasarle todas las metricas de esa categoria. Pide que destaque lo mas relevante y sugiera una accion concreta.
+</div>
+
+<div class="expected-result">
+Generar y ejecutar un CREATE DYNAMIC TABLE complejo con dos CTEs, JOINs y una llamada a AI_COMPLETE por cada categoria.
+</div>
+
+### Leer los insights
+
+<div class="prompt-block">
+Muestrame los insights generados por AI para cada categoria, ordenados por ventas totales descendente.
+</div>
+
+---
+
+## Verificar el Pipeline Completo
+
+<div class="prompt-block">
+Muestrame todas las dynamic tables que existen en el schema RETAIL con su estado actual.
+</div>
+
+<div class="expected-result">
+Ejecutar SHOW DYNAMIC TABLES y mostrar las 3 DTs con su estado de refresh.
+</div>
+
+<div class="prompt-block">
+Muestrame el historial de refreshes de las 3 dynamic tables que creamos.
+</div>
 
 | Dynamic Table | Fuentes |
 |---|---|
@@ -195,14 +157,6 @@ SHOW DYNAMIC TABLES IN SCHEMA HOL_CORTEX_CODE.RETAIL;
 | `dt_ventas_detalle` | raw_ordenes, raw_clientes, raw_productos |
 | `dt_dashboard_consolidado` | dt_reviews_enriquecidas, dt_ventas_detalle |
 
-:::tip Historial de refreshes
-```sql
-SELECT *
-FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY())
-WHERE NAME IN ('DT_REVIEWS_ENRIQUECIDAS', 'DT_VENTAS_DETALLE', 'DT_DASHBOARD_CONSOLIDADO')
-ORDER BY REFRESH_END_TIME DESC
-LIMIT 20;
-```
-:::
-
+:::info Siguiente paso
 Estas Dynamic Tables alimentaran el dashboard de Streamlit en el **Lab 3**.
+:::
