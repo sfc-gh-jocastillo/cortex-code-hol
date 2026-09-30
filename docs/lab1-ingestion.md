@@ -1,26 +1,22 @@
 ---
 sidebar_position: 3
-title: "Lab 1: Ingestion y Transformacion"
+title: "Lab 1: Exploracion y Transformacion"
 ---
 
-# Lab 1: Ingestion y Transformacion con AI
+# Lab 1: Exploracion y Transformacion con AI
 
 **Duracion:** 60 minutos
 
-En este lab vas a explorar los datos cargados y crear transformaciones usando solamente prompts a Cortex Code. No escribes SQL, Cortex Code lo hace por ti.
+En este lab vas a explorar los datos y escribir queries de analisis usando solo prompts a Cortex Code. No creas objetos permanentes — el objetivo es aprender a pedirle a Cortex Code que genere SQL por ti.
 
 ---
 
-## Parte 1: Exploracion de Datos (15 min)
+## Parte 1: Conocer los Datos (15 min)
 
-### Conocer las tablas
+### Vista rapida de las tablas
 
 <div class="prompt-block">
-Muestrame las primeras 5 filas de cada una de las 4 tablas raw (raw_clientes, raw_productos, raw_ordenes, raw_reviews_clientes) para que pueda entender la estructura de los datos.
-</div>
-
-<div class="expected-result">
-Ejecutar SELECT * LIMIT 5 de cada tabla y mostrar los resultados.
+Muestrame las primeras 5 filas de cada una de las 4 tablas raw (raw_clientes, raw_productos, raw_ordenes, raw_reviews_clientes) para entender la estructura de los datos.
 </div>
 
 ### Distribucion de clientes
@@ -29,7 +25,11 @@ Ejecutar SELECT * LIMIT 5 de cada tabla y mostrar los resultados.
 Cuantos clientes hay por region? Ordenalos de mayor a menor.
 </div>
 
-### Precios por categoria
+<div class="prompt-block">
+Cual es la distribucion de clientes por segmento (Premium, Standard, Basico)?
+</div>
+
+### Productos y precios
 
 <div class="prompt-block">
 Para cada categoria de producto, muestrame cuantos productos hay, el precio promedio, el minimo y el maximo. Ordena por precio promedio descendente.
@@ -41,86 +41,113 @@ Para cada categoria de producto, muestrame cuantos productos hay, el precio prom
 Que porcentaje de ordenes esta en cada estado (Completada, Pendiente, Cancelada)?
 </div>
 
-### Reviews y ratings
+### Reviews
 
 <div class="prompt-block">
 Como se distribuyen los ratings del 1 al 5 en las reviews? Muestrame el conteo y porcentaje de cada uno.
 </div>
 
+<div class="prompt-block">
+Muestrame 5 reviews de ejemplo con rating 1 para ver como son las quejas de los clientes.
+</div>
+
 :::tip Experimenta
-Pregunta lo que quieras sobre los datos. Cortex Code entiende contexto, asi que puedes hacer preguntas como: "Cuantos clientes Premium hay en la Region Metropolitana?" o "Cual es el producto mas caro?"
+Pregunta lo que quieras. Cortex Code entiende contexto, asi que puedes hacer preguntas como "Cuantos clientes Premium hay en la Region Metropolitana?" o "Cual es el producto mas caro en la categoria Deportes?"
 :::
 
 ---
 
-## Parte 2: Transformaciones (25 min)
+## Parte 2: Analisis de Clientes (15 min)
+
+Ahora vamos a hacer analisis mas complejos que combinan varias tablas. Estos queries no crean objetos — solo muestran resultados.
 
 ### Metricas por cliente
 
 <div class="prompt-block">
-Calcula para cada cliente: su nombre, region, segmento, total de ordenes completadas, total gastado, ticket promedio, fecha de primera y ultima compra, y cuantos dias lleva como cliente. Ordena por total gastado descendente.
+Calcula para cada cliente: su nombre, region, segmento, total de ordenes completadas, total gastado, ticket promedio, y fecha de ultima compra. Ordena por total gastado descendente. Muestrame los top 20.
 </div>
 
 <div class="expected-result">
-Generar un query con JOINs entre raw_clientes y raw_ordenes, agregaciones y calculos de fecha. Ejecutarlo y mostrar resultados.
+Generar un query con JOIN entre raw_clientes y raw_ordenes, agregaciones con GROUP BY y filtro por estado completada. Ejecutar y mostrar resultados.
 </div>
 
-### Ventas cruzadas
+### Clientes inactivos
 
 <div class="prompt-block">
-Muestrame las ventas totales cruzando region del cliente con categoria del producto, solo para ordenes completadas. Incluye total de ordenes, ventas totales y ticket promedio. Ordena por ventas totales descendente.
+Cuales son los clientes que no han comprado en los ultimos 90 dias? Muestrame su nombre, region, segmento y fecha de ultima compra.
 </div>
 
-### Top 10 productos
+### Clientes por segmento
 
 <div class="prompt-block">
-Cuales son los 10 productos que mas ingresos generaron? Incluye la categoria, cuantas veces se vendio, unidades vendidas e ingresos totales.
+Compara los 3 segmentos de clientes (Premium, Standard, Basico): cual gasta mas en promedio? Cual tiene mas ordenes? Cual tiene mejor ticket promedio?
+</div>
+
+---
+
+## Parte 3: Analisis de Ventas (15 min)
+
+### Top productos
+
+<div class="prompt-block">
+Cuales son los 10 productos que mas ingresos generaron? Incluye la categoria, cuantas veces se vendio, unidades vendidas e ingresos totales. Solo ordenes completadas.
+</div>
+
+### Ventas por region y categoria
+
+<div class="prompt-block">
+Muestrame las ventas totales cruzando region del cliente con categoria del producto, solo ordenes completadas. Que combinacion region-categoria vende mas?
 </div>
 
 ### Tendencia mensual
 
 <div class="prompt-block">
-Muestrame la tendencia mensual de ventas: por cada mes, cuantas ordenes completadas hubo, cuanto se vendio en total y cuantos clientes unicos compraron.
+Muestrame la tendencia mensual de ventas de los ultimos 12 meses: por cada mes cuantas ordenes completadas hubo, cuanto se vendio en total y cuantos clientes unicos compraron.
+</div>
+
+### Comparacion por canal
+
+<div class="prompt-block">
+Compara los 3 canales de venta (Web, Tienda, App): cuantas ordenes tiene cada uno, cual genera mas ingresos y cual tiene mejor ticket promedio?
 </div>
 
 ---
 
-## Parte 3: Crear Vistas para el Pipeline (20 min)
+## Parte 4: Analisis de Reviews (15 min)
 
-Ahora vamos a pedirle a Cortex Code que cree vistas que serviran como base para el pipeline del Lab 2.
-
-### Vista de ordenes enriquecidas
+### Reviews por rating y producto
 
 <div class="prompt-block">
-Crea una vista llamada v_ordenes_enriquecidas que haga JOIN de raw_ordenes con raw_clientes y raw_productos. Trae los campos mas relevantes de cada tabla: de ordenes el id, fecha, cantidad, monto, estado y canal; de clientes el id, nombre, region, comuna y segmento; de productos el id, nombre, categoria, precio unitario y proveedor.
+Cuales son los productos con peor rating promedio? Muestrame los 10 peores con su rating promedio, cantidad de reviews y un ejemplo de review negativa.
 </div>
 
-<div class="expected-result">
-Generar y ejecutar un CREATE VIEW con los JOINs correspondientes.
-</div>
-
-### Vista de metricas por cliente
+### Correlacion rating y monto
 
 <div class="prompt-block">
-Crea una vista llamada v_metricas_clientes que para cada cliente calcule: ordenes completadas, ordenes canceladas, total gastado (solo completadas), ticket promedio, fecha de ultima compra y dias sin comprar desde hoy. Incluye los datos basicos del cliente (nombre, email, region, comuna, segmento, fecha de registro).
+Hay relacion entre el monto gastado y el rating que deja el cliente? Agrupa las reviews por rating (1 a 5) y muestrame el monto promedio de la orden asociada.
 </div>
 
-### Vista de resumen de ventas
+### Reviews por canal
 
 <div class="prompt-block">
-Crea una vista llamada v_resumen_ventas que agrupe las ventas completadas por mes, region, categoria y canal. Para cada grupo calcula: total de ordenes, total de ventas, clientes unicos y ticket promedio.
+Los clientes que compran por Web dejan mejores o peores reviews que los de Tienda o App? Muestrame el rating promedio por canal.
 </div>
 
-### Verificar
+### Preview del texto
 
 <div class="prompt-block">
-Muestrame las vistas que existen en el schema RETAIL.
-</div>
-
-<div class="expected-result">
-Ejecutar SHOW VIEWS y mostrar las 3 vistas creadas: v_ordenes_enriquecidas, v_metricas_clientes, v_resumen_ventas.
+Muestrame 3 reviews positivas (rating 5) y 3 negativas (rating 1) con el texto completo. Quiero ver como escriben los clientes.
 </div>
 
 :::info Siguiente paso
-Estas vistas alimentaran el pipeline de Dynamic Tables en el **Lab 2**.
+En el **Lab 2** vamos a tomar estas mismas reviews y aplicarles funciones de Cortex AI (sentimiento, clasificacion, generacion de insights) usando Dynamic Tables.
 :::
+
+---
+
+## Que aprendimos
+
+- Como usar Cortex Code para explorar datos rapidamente sin escribir SQL
+- Como pedir analisis complejos (JOINs, agregaciones, filtros) en lenguaje natural
+- Como iterar sobre preguntas: empezar con algo simple y profundizar
+- Los datos de reviews en espanol que vamos a enriquecer con AI en el Lab 2

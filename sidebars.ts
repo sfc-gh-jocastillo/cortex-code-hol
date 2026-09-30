@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
       label: 'Laboratorios',
       items: ['lab1-ingestion', 'lab2-pipeline', 'lab3-streamlit'],
     },
+    'cleanup',
   ],
 };
 
