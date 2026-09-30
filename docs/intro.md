@@ -36,25 +36,7 @@ Los prompts son sugerencias. Si quieres pedir algo diferente o explorar por tu c
 
 ## Pipeline objetivo
 
-```
-S3 Bucket (CSV/Parquet)
-    │
-    ▼
-External Stage ──► COPY INTO ──► Tablas Raw
-                                    │
-                    ┌───────────────┼───────────────┐
-                    ▼               ▼               ▼
-            dt_reviews_enriq.  dt_ventas_detalle    │
-            (SENTIMENT +       (JOINs + metricas)   │
-             CLASSIFY)              │               │
-                    └───────────────┼───────────────┘
-                                    ▼
-                        dt_dashboard_consolidado
-                        (+ AI_COMPLETE insights)
-                                    │
-                                    ▼
-                    Streamlit-in-Snowflake Dashboard
-```
+![Arquitectura del pipeline](/img/pipeline-arquitectura.png)
 
 ## Requisitos
 
