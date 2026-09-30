@@ -7,9 +7,21 @@ title: Setup
 
 En este paso vas a preparar tu ambiente de Snowflake usando Cortex Code. Todo se hace con prompts en lenguaje natural.
 
+## Paso 0: Descargar los datos
+
+Descarga el archivo ZIP con los datos del taller:
+
+👉 **[Descargar datos del taller](https://github.com/sfc-gh-jocastillo/cortex-code-hol/releases/download/v1.0/hol-data.zip)**
+
+Descomprime el ZIP. Vas a encontrar 4 archivos:
+- `clientes.csv` — 200 clientes
+- `productos.csv` — 50 productos
+- `ordenes.parquet` — 2,000 ordenes
+- `reviews.parquet` — 500 reviews en espanol
+
 ## Paso 1: Crear la infraestructura
 
-Abre Cortex Code en Snowsight y escribe:
+Abre **Cortex Code en Snowsight** y escribe:
 
 <div class="prompt-block">
 Usando el rol SYSADMIN, crea un warehouse llamado HOL_WH de tamano XSMALL con auto-suspend en 60 segundos y auto-resume activado. Luego crea una base de datos HOL_CORTEX_CODE con un schema llamado RETAIL. Posicionate en esa base de datos y schema.
@@ -47,48 +59,65 @@ Crea 4 tablas en el schema RETAIL:
 Generar y ejecutar los 4 CREATE TABLE.
 </div>
 
-## Paso 4: Conectar con S3 y cargar datos
+## Paso 4: Crear el stage y subir los datos
 
-Los datos del taller estan en un bucket S3 publico. Primero vamos a crear el external stage y luego cargar los datos.
-
-### Crear el External Stage
+### Crear el internal stage
 
 <div class="prompt-block">
-Usando el rol SYSADMIN, crea un external stage llamado stg_s3_retail en el schema HOL_CORTEX_CODE.RETAIL que apunte a la URL 's3://hol-cortex-code-chile/' sin credenciales (el bucket es publico). Usa el parametro CREDENTIALS = () para indicar que no se necesitan credenciales.
+Crea un internal stage llamado stg_hol_data en el schema RETAIL con directorio habilitado.
 </div>
 
 <div class="expected-result">
-Generar y ejecutar un CREATE STAGE con URL de S3 y sin credenciales (acceso publico).
+Generar y ejecutar CREATE STAGE con DIRECTORY = (ENABLE = TRUE).
 </div>
 
-### Verificar que se ven los archivos
+### Subir los archivos
+
+Ahora vamos a subir los 4 archivos al stage. En Snowsight:
+
+1. Ve a **Data > Databases > HOL_CORTEX_CODE > RETAIL > Stages > STG_HOL_DATA**
+2. Haz click en **+ Files** (boton azul arriba a la derecha)
+3. Selecciona los 4 archivos que descomprimiste (clientes.csv, productos.csv, ordenes.parquet, reviews.parquet)
+4. Haz click en **Upload**
+
+:::tip Alternativa via SQL
+Si prefieres usar la linea de comandos de SnowSQL en vez de la UI:
+```
+PUT file:///ruta/a/clientes.csv @stg_hol_data/clientes/ AUTO_COMPRESS=FALSE;
+PUT file:///ruta/a/productos.csv @stg_hol_data/productos/ AUTO_COMPRESS=FALSE;
+PUT file:///ruta/a/ordenes.parquet @stg_hol_data/ordenes/ AUTO_COMPRESS=FALSE;
+PUT file:///ruta/a/reviews.parquet @stg_hol_data/reviews/ AUTO_COMPRESS=FALSE;
+```
+:::
+
+### Verificar que se subieron
 
 <div class="prompt-block">
-Lista los archivos del stage @stg_s3_retail para verificar que puedo ver el contenido del bucket.
+Lista los archivos del stage @stg_hol_data para verificar que se subieron correctamente.
 </div>
 
 <div class="expected-result">
-Ejecutar LIST @stg_s3_retail y mostrar los archivos CSV y Parquet en las carpetas clientes/, productos/, ordenes/ y reviews/.
+Ejecutar LIST @stg_hol_data y mostrar los 4 archivos subidos.
 </div>
 
-### Cargar los datos
+## Paso 5: Cargar los datos en las tablas
 
 <div class="prompt-block">
-Carga datos en las 4 tablas raw desde el stage @stg_s3_retail:
+Carga datos en las 4 tablas raw desde el stage @stg_hol_data:
 
-- raw_clientes desde /clientes/ usando csv_format
-- raw_productos desde /productos/ usando csv_format
-- raw_ordenes desde /ordenes/ usando parquet_format
-- raw_reviews_clientes desde /reviews/ usando parquet_format
+- raw_clientes desde clientes.csv usando csv_format
+- raw_productos desde productos.csv usando csv_format
+- raw_ordenes desde ordenes.parquet usando parquet_format
+- raw_reviews_clientes desde reviews.parquet usando parquet_format
 
-Usa MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE en todos los COPY INTO.
+Usa MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE en todos los COPY INTO. Usa el pattern adecuado para encontrar cada archivo en el stage.
 </div>
 
 <div class="expected-result">
-Generar y ejecutar 4 sentencias COPY INTO que cargan los datos desde S3.
+Generar y ejecutar 4 sentencias COPY INTO que cargan los datos desde el internal stage.
 </div>
 
-## Paso 5: Verificar la carga
+## Paso 6: Verificar la carga
 
 <div class="prompt-block">
 Muestrame el conteo de filas de cada una de las 4 tablas raw en una sola consulta.
